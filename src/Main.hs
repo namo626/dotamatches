@@ -1,6 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+import Cmd
+
 import Text.HTML.Scalpel hiding (URL)
+import Options.Applicative (execParser)
 import System.IO
 import Data.Either (rights)
 import Control.Lens
@@ -8,7 +11,7 @@ import Network.HTTP.Client (HttpException (..))
 import Control.Exception
 import qualified Data.Text.Lazy as T
 import Data.Text.Lazy.Encoding (decodeUtf8)
-import Network.Wreq
+import Network.Wreq hiding (Options)
 import Text.HTML.TagSoup (parseTags)
 import Data.List.Split
 import Control.Concurrent.Async
@@ -167,9 +170,16 @@ processTour url = do
 
 -- | Exception handler for network
 
+nowOrNext :: Options -> [[a]] -> [[a]]
+nowOrNext _ [] = [[],[]]
+nowOrNext (Options Now) (m:ms) = [m,[]]
+nowOrNext (Options Next) (l:u:_) = [[], u]
+nowOrNext _ mss = mss
 
 main :: IO ()
 main = do
+  opts <- execParser greet
+  print opts
   r <- try $ getBody url
   case r of
     Left (HttpExceptionRequest _ _) -> putStrLn "Network Error!"
@@ -178,8 +188,9 @@ main = do
       let res = scrape' matchTimes body
       case res of
         Nothing -> putStrLn "Data not found"
-        Just (lives:upcomings:_) -> do
-          let liveURLs = map getTourURL lives
+        Just mss -> do
+          let (lives:upcomings:_) = nowOrNext opts mss
+              liveURLs = map getTourURL lives
               upcomingURLs = map getTourURL upcomings
 
           -- Generate an MVar (in an Async) for each tournament URL
@@ -204,9 +215,9 @@ main = do
               mds = zipWith MatchDisplay upcomings (rights upcomingDetails)
 
           -- Print only ones that were already downloaded (if user tried to cancel)
-          putStrLn "Live matches: \n"
+          when (not $ null lds) $ putStrLn "Live matches: \n"
           mapM_ print lds
-          putStrLn "Upcoming matches: \n"
+          when (not $ null mds) $ putStrLn "Upcoming matches: \n"
           mapM_ print mds
 
 
