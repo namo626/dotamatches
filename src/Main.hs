@@ -5,6 +5,7 @@ import Cmd
 import Text.HTML.Scalpel hiding (URL)
 import Options.Applicative (execParser)
 import System.IO
+import Data.Char (isDigit)
 import Data.Either (rights)
 import Control.Lens
 import Network.HTTP.Client (HttpException (..))
@@ -36,30 +37,50 @@ getTourURL :: MatchInfo -> URL
 getTourURL (Live t) = t
 getTourURL (Upcoming _ t) = t
 
-data MatchDetails = MatchDetails
-  { getTitle :: T.Text
-  , getType :: T.Text
-  , getMatchup :: Match
+-- | Specific match detail after following URL
+data MatchDetails = MatchDetails_l LiveMatchDetails
+                  | MatchDetails_u UpMatchDetails
+                  deriving (Eq)
+
+data LiveMatchDetails = LiveMatchDetails
+  { lTitle :: T.Text         -- ^ Title of the tournament
+  , lType :: T.Text          -- ^ BO1, BO3, etc.
+  , lMatchup :: Match        -- ^ Team names
+  , lResults :: [T.Text]     -- ^ Results for past and current games
+  , lCurrent :: Int       -- ^ Current game being played, e.g. 2nd game
   } deriving (Eq)
 
-data MatchDisplay = MatchDisplay
-  { getMatchInfo :: MatchInfo
-  , getMatchDetails :: MatchDetails
+data UpMatchDetails = UpMatchDetails
+  { uTitle :: T.Text
+  , uType :: T.Text
+  , uMatchup :: Match
   } deriving (Eq)
+
+data MatchDisplay = MatchDisplay MatchInfo (Either SomeException MatchDetails)
 
 instance Show MatchInfo where
   show (Live _) = "\n"
   show (Upcoming t tour) =
-    T.unpack $ "Live in " <> t <> "\n"
+    T.unpack $ T.concat ["Live in ", t, "\n"]
 
 instance Show MatchDetails where
-  show (MatchDetails n t m) =
-    show m <> (T.unpack $ "\n" <> n <> "\n" <> t)
+  show (MatchDetails_l lmd) = show lmd
+  show (MatchDetails_u umd) = show umd
+
+instance Show LiveMatchDetails where
+  show (LiveMatchDetails n t (t1, t2) res c) =
+    T.unpack t1 <> " vs. " <> T.unpack t2 <> "\n"
+    <> (T.unpack $ n <> "\n" <> t) <> "\n"
+    <> (show $ map T.unpack res) <> "\n"
+    <> "Currently playing game " <> show c <> "\n"
+
+instance Show UpMatchDetails where
+  show (UpMatchDetails n t (t1, t2)) =
+    T.unpack $ T.concat [t1, " vs. ", t2, "\n", n, "\n", t]
 
 instance Show MatchDisplay where
   show (MatchDisplay info details) =
     show details <> "\n" <> show info
-
 
 url = "https://www.gosugamers.net/dota2/gosubet"
 
@@ -109,7 +130,7 @@ matchTimes :: Scraper T.Text [[MatchInfo]]
 matchTimes = chroots ("div" @: ["class" @= "box"]) matchInfos
 
 
--- Navigating tournament links for more information -------------------------------------
+-- Navigating tournament links for more information -------------------------------
 
 -- | Parses the tournament name
 tourName :: Scraper T.Text Tournament
@@ -131,16 +152,38 @@ tourOpp tok = chroot ("div" @: [hasClass tok]) (text $ "h3" // "a")
 tourOpp1 = tourOpp "opponent1"
 tourOpp2 = tourOpp "opponent2"
 
--- | Main tournament parser
-tourParser :: Scraper T.Text MatchDetails
-tourParser = do
+tourResult :: Scraper T.Text [T.Text]
+tourResult = texts $ "a" @: ["class" @= "button live js-parent-hover", "pos" @= "0"]
+
+--tourResults :: Scraper T.Text [T.Text]
+--tourResults = chroot ("div" @: ["class" @= "matches-streams"]) tourResult
+
+-- | Main tournament parsers, live or upcoming games
+liveTourParser :: Scraper T.Text MatchDetails
+liveTourParser = do
   n <- tourName
   t <- tourType
   m <- tourMatchup
-  return $ MatchDetails n t m
+  r <- tourResult
+  let c = currentGame r
+  return $ MatchDetails_l $ LiveMatchDetails n t m r c
+    where
+      currentGame :: [T.Text] -> Int
+      currentGame r = maximum . map (read . filter isDigit . T.unpack) $ r
+
+upTourParser :: Scraper T.Text MatchDetails
+upTourParser = do
+  n <- tourName
+  t <- tourType
+  m <- tourMatchup
+  return $ MatchDetails_u $ UpMatchDetails n t m
+
+-- | Main tournament parser
+--tourParser :: Scraper T.Text MatchDetails
+--tourParser = liveTourParser <|> upTourParser
 
 
--- Scraping functions (IO involved) -------------------------------------------------------------
+-- Scraping functions (IO involved) ---------------------------------------------
 
 data MatchException = TournamentException
   deriving Show
@@ -156,11 +199,11 @@ getBody url = do
   response <- get (T.unpack url)
   return $ response ^. responseBody . to decodeUtf8
 
--- | Executes the main tournament parser on the tournament URL
-processTour :: URL -> IO MatchDetails
-processTour url = do
+-- | Executes the main tournament parser on the tournament URL and given tournament parser
+processTour :: Scraper T.Text a -> URL -> IO a
+processTour p url = do
   body <- getBody url
-  let tourPage = scrape' tourParser body
+  let tourPage = scrape' p body
   case tourPage of
     Nothing -> throwIO TournamentException
     Just tn -> return tn
@@ -195,8 +238,8 @@ main = do
 
           -- Generate an MVar (in an Async) for each tournament URL
           -- to be scraped concurrently
-          ls <- mapM (async . processTour) liveURLs
-          as <- mapM (async . processTour) (take 3 upcomingURLs)
+          ls <- mapM (async . processTour liveTourParser) liveURLs
+          as <- mapM (async . processTour upTourParser) (take 3 upcomingURLs)
 
           -- Option for user to cancel downloading
           forkIO $ do
@@ -208,11 +251,11 @@ main = do
                                    mapM_ cancel ls
                                    mapM_ cancel as
 
-          liveDetails <- mapM waitCatch ls
+          liveDetails <- mapM waitCatch ls   --Left exception OR Right MatchDetails
           upcomingDetails <- mapM waitCatch as
 
-          let lds = zipWith MatchDisplay lives (rights liveDetails)
-              mds = zipWith MatchDisplay upcomings (rights upcomingDetails)
+          let lds = zipWith MatchDisplay lives liveDetails
+              mds = zipWith MatchDisplay upcomings upcomingDetails
 
           -- Print only ones that were already downloaded (if user tried to cancel)
           when (not $ null lds) $ putStrLn "Live matches: \n"
