@@ -46,7 +46,7 @@ data LiveMatchDetails = LiveMatchDetails
   { lTitle :: T.Text         -- ^ Title of the tournament
   , lType :: T.Text          -- ^ BO1, BO3, etc.
   , lMatchup :: Match        -- ^ Team names
-  , lResults :: [T.Text]     -- ^ Results for past and current games
+  , lResults :: Maybe [T.Text]     -- ^ Results for past and current games
   , lCurrent :: Int       -- ^ Current game being played, e.g. 2nd game
   } deriving (Eq)
 
@@ -71,7 +71,7 @@ instance Show LiveMatchDetails where
   show (LiveMatchDetails n t (t1, t2) res c) =
     T.unpack t1 <> " vs. " <> T.unpack t2 <> "\n"
     <> (T.unpack $ n <> "\n" <> t) <> "\n"
-    <> (show $ map T.unpack res) <> "\n"
+    <> (show $ fmap (map T.unpack) res) <> "\n"
     <> "Currently playing game " <> show c <> "\n"
 
 instance Show UpMatchDetails where
@@ -79,8 +79,10 @@ instance Show UpMatchDetails where
     T.unpack $ T.concat [t1, " vs. ", t2, "\n", n, "\n", t]
 
 instance Show MatchDisplay where
-  show (MatchDisplay info details) =
-    show details <> "\n" <> show info
+  show (MatchDisplay info (Left err)) =
+    show err <> "\n" <> show info
+  show (MatchDisplay info (Right details)) =
+    show details <> "\n" <> (show info)
 
 url = "https://www.gosugamers.net/dota2/gosubet"
 
@@ -153,26 +155,31 @@ tourOpp1 = tourOpp "opponent1"
 tourOpp2 = tourOpp "opponent2"
 
 tourResult :: Scraper T.Text [T.Text]
-tourResult = texts $ "a" @: ["class" @= "button live js-parent-hover", "pos" @= "0"]
+tourResult = attrs "winner" $ "input" @: ["class" @= "btn-winner"]
+
+tourCurrent :: Scraper T.Text Int
+tourCurrent = fmap currentGame $ texts $ "a" @: ["class" @= "button live js-parent-hover", "pos" @= "0"] where
+  currentGame :: [T.Text] -> Int
+  currentGame r = maximum . map (read . filter isDigit . T.unpack) $ r
 
 --tourResults :: Scraper T.Text [T.Text]
 --tourResults = chroot ("div" @: ["class" @= "matches-streams"]) tourResult
 
 -- | Main tournament parsers, live or upcoming games
-liveTourParser :: Scraper T.Text MatchDetails
-liveTourParser = do
+liveTourParser :: Options -> Scraper T.Text MatchDetails
+liveTourParser opts = do
   n <- tourName
   t <- tourType
   m <- tourMatchup
-  r <- tourResult
-  let c = currentGame r
-  return $ MatchDetails_l $ LiveMatchDetails n t m r c
-    where
-      currentGame :: [T.Text] -> Int
-      currentGame r = maximum . map (read . filter isDigit . T.unpack) $ r
+  r <- fmap choice tourResult
+  c <- tourCurrent
+  return $ MatchDetails_l $ LiveMatchDetails n t m r c where
+    choice :: [T.Text] -> Maybe [T.Text]
+    choice res | (getSpoilMode opts) = Just res
+               | otherwise = Nothing
 
-upTourParser :: Scraper T.Text MatchDetails
-upTourParser = do
+upTourParser :: Options -> Scraper T.Text MatchDetails
+upTourParser opts = do
   n <- tourName
   t <- tourType
   m <- tourMatchup
@@ -209,14 +216,12 @@ processTour p url = do
     Just tn -> return tn
 
 
--- | Reworking exception handling instead of Maybe type
 
--- | Exception handler for network
-
+-- | Parsing user option to view only live or upcoming matches (or both, by default)
 nowOrNext :: Options -> [[a]] -> [[a]]
 nowOrNext _ [] = [[],[]]
-nowOrNext (Options Now) (m:ms) = [m,[]]
-nowOrNext (Options Next) (l:u:_) = [[], u]
+nowOrNext (Options Now _) (m:ms) = [m,[]]
+nowOrNext (Options Next _) (l:u:_) = [[], u]
 nowOrNext _ mss = mss
 
 main :: IO ()
@@ -238,8 +243,8 @@ main = do
 
           -- Generate an MVar (in an Async) for each tournament URL
           -- to be scraped concurrently
-          ls <- mapM (async . processTour liveTourParser) liveURLs
-          as <- mapM (async . processTour upTourParser) (take 3 upcomingURLs)
+          ls <- mapM (async . processTour (liveTourParser opts)) liveURLs
+          as <- mapM (async . processTour (upTourParser opts)) (take 3 upcomingURLs)
 
           -- Option for user to cancel downloading
           forkIO $ do
