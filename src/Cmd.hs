@@ -13,6 +13,7 @@ import Control.Applicative
 data Options = Options
   { getViewTime :: ViewTime
   , getSpoilMode :: Bool
+  , getFollowing :: Bool
   }
   deriving (Show)
 
@@ -28,12 +29,18 @@ greet = info (helper <*> options) ( fullDesc
 
 -- | Main option collector
 options :: Parser Options
-options = Options <$> (now <|> next) <*> spoil
+options = Options <$> (now <|> next) <*> spoil <*> onlyFavs
 
 -- | Choice to view results for live games (if available)
 spoil :: Parser Bool
 spoil = switch (short 's' <> long "spoil" <> help "Show available results for live matches")
 
+-- | Choice to view only followed teams
+onlyFavs :: Parser Bool
+onlyFavs = switch
+           ( short 'f'
+           <> long "following"
+           <> help "Display only followed teams" )
 
 -- | Choice to view only live or upcoming matches
 now :: Parser ViewTime
