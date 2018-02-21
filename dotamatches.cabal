@@ -37,4 +37,5 @@ executable dotamatches
                        tagsoup >= 0.14.1,
                        text,
                        optparse-applicative,
-                       wreq
+                       wreq,
+                       SafeSemaphore

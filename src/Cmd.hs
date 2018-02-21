@@ -14,6 +14,8 @@ data Options = Options
   { getViewTime :: ViewTime
   , getSpoilMode :: Bool
   , getFollowing :: Bool
+  , getThreads :: Int
+  , maxUpDisplay :: Int
   }
   deriving (Show)
 
@@ -29,7 +31,25 @@ greet = info (helper <*> options) ( fullDesc
 
 -- | Main option collector
 options :: Parser Options
-options = Options <$> (now <|> next) <*> spoil <*> onlyFavs
+options = Options <$> (now <|> next) <*> spoil <*> onlyFavs <*> threads <*> maxUp
+
+-- | Specify the maximum number of upcoming matches to display
+maxUp :: Parser Int
+maxUp = option auto
+        ( short 'n'
+        <> long "maxup"
+        <> metavar "N"
+        <> value 5
+        <> help "Display a maximum of N upcoming matches" )
+
+-- | Choice for number of threads to use
+threads :: Parser Int
+threads = option auto
+          ( short 't'
+          <> long "threads"
+          <> metavar "THREADNUM"
+          <> value 1
+          <> help "Specify the number of threads to use" )
 
 -- | Choice to view results for live games (if available)
 spoil :: Parser Bool

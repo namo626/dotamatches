@@ -9,7 +9,7 @@
 -}
 
 import Cmd
-
+import System.Environment (getArgs)
 import Text.HTML.Scalpel hiding (URL)
 import Options.Applicative (execParser)
 import System.IO
@@ -24,11 +24,12 @@ import Network.Wreq hiding (Options)
 import Text.HTML.TagSoup (parseTags)
 import Data.List.Split
 import Control.Concurrent.Async
-import Control.Concurrent (forkIO, ThreadId(..))
+import Control.Concurrent (threadDelay, forkIO, ThreadId(..))
 import Data.String.Utils
 import Control.Monad
 import Control.Applicative ((<|>), (<$>), (<*>))
 import Data.Monoid ((<>))
+import Control.Concurrent.MSem
 
 
 type Team = T.Text
@@ -150,21 +151,22 @@ tourName = text $ "h1" // "a"
 tourType :: Scraper T.Text Tournament
 tourType = text $ "p" @: ["class" @= "bestof"]
 
+-- | Combines two teams into a match tuple
 tourMatchup :: Scraper T.Text Match
-tourMatchup = do
-  opp1 <- tourOpp1
-  opp2 <- tourOpp2
-  return (opp1, opp2)
+tourMatchup = liftM2 (,) tourOpp1 tourOpp2
 
+-- | Parses a team's name
 tourOpp :: String -> Scraper T.Text T.Text
 tourOpp tok = chroot ("div" @: [hasClass tok]) (text $ "h3" // "a")
 
 tourOpp1 = tourOpp "opponent1"
 tourOpp2 = tourOpp "opponent2"
 
+-- | Winners of previous games
 tourResult :: Scraper T.Text [T.Text]
 tourResult = attrs "winner" $ "input" @: ["class" @= "btn-winner"]
 
+-- | Current game that is being played, 1st - 5th
 tourCurrent :: Scraper T.Text Int
 tourCurrent = fmap currentGame $ texts $ "a" @: ["class" @= "button live js-parent-hover", "pos" @= "0"] where
   currentGame :: [T.Text] -> Int
@@ -218,6 +220,7 @@ getBody url = do
 processTour :: Scraper T.Text a -> URL -> IO a
 processTour p url = do
   body <- getBody url
+  threadDelay $ 1 * 10^6
   let tourPage = scrape' p body
   case tourPage of
     Nothing -> throwIO TournamentException
@@ -241,32 +244,26 @@ main = do
   print teams
   r <- try $ getBody url
   case r of
-    Left (HttpExceptionRequest _ _) -> putStrLn "Network Error!"
-    Left (InvalidUrlException _ _) -> putStrLn "Invalid URL"
+    Left (HttpExceptionRequest _ _) -> putStrLn "Network Error."
+    Left (InvalidUrlException _ _) -> putStrLn "Invalid URL."
     Right body -> do
       let res = scrape' matchTimes body
       case res of
-        Nothing -> putStrLn "Data not found"
+        Nothing -> putStrLn "Match summary not found."
         Just mss -> do
           let (lives:upcomings:_) = nowOrNext opts mss
               liveURLs = map getTourURL lives
               upcomingURLs = map getTourURL upcomings
+              n = maxUpDisplay opts
+
+          sem <- new $ getThreads opts
 
           -- Generate an MVar (in an Async) for each tournament URL
           -- to be scraped concurrently
           -- ls, as are MatchDetails
-          ls <- mapM (async . processTour (liveTourParser opts)) liveURLs
-          as <- mapM (async . processTour (upTourParser opts)) (take 3 upcomingURLs)
+          ls <- mapM (async . with sem . processTour (liveTourParser opts)) liveURLs
+          as <- mapM (async . with sem . processTour (upTourParser opts)) (take n upcomingURLs)
 
-          -- Option for user to cancel downloading
-          forkIO $ do
-            putStrLn "Fetching match infos...\nPress q to cancel download.\n"
-            hSetBuffering stdin NoBuffering
-            forever $ do
-              c <- getChar
-              when (c == 'q') $ do putStrLn "\nProcess canceled by user"
-                                   mapM_ cancel ls
-                                   mapM_ cancel as
 
           liveDetails <- mapM waitCatch ls   --Left exception OR Right MatchDetails
           upcomingDetails <- mapM waitCatch as
@@ -282,6 +279,16 @@ main = do
           mapM_ print mds
 
 
+-- | Option for user to cancel downloading
+cancelDownload :: [Async a] -> [Async a] -> IO ThreadId
+cancelDownload ls as = forkIO $ do
+    putStrLn "Fetching match infos...\nPress q to cancel download.\n"
+    hSetBuffering stdin NoBuffering
+    forever $ do
+      c <- getChar
+      when (c == 'q') $ do putStrLn "\nProcess canceled by user"
+                           mapM_ cancel ls
+                           mapM_ cancel as
 
 --Utilities
 
