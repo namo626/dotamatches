@@ -38,4 +38,5 @@ executable dotamatches
                        text,
                        optparse-applicative,
                        wreq,
-                       SafeSemaphore
+                       SafeSemaphore,
+                       ansi-wl-pprint
