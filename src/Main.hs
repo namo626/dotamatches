@@ -11,6 +11,8 @@
 
 import Cmd
 import HTMLParser
+import PrettyPrint
+import System.Exit
 import System.Environment (getArgs)
 import Options.Applicative (execParser)
 import System.IO
@@ -44,6 +46,9 @@ url = "https://www.gosugamers.net/dota2/gosubet"
 main :: IO ()
 main = do
   opts <- execParser greet
+  when ((getThreads opts) < 1) $ do
+    putStrLn "No. of threads must be at least 1"
+    exitWith (ExitFailure 1)
   print opts
   print teams
   r <- try $ getBody url
@@ -72,15 +77,15 @@ main = do
           liveDetails <- mapM waitCatch ls   --Left exception OR Right MatchDetails
           upcomingDetails <- mapM waitCatch as
 
-          let lds = filter (isFavTeam todo teams . extractMatch) $ zipWith MatchDisplay lives liveDetails
-              mds = filter (isFavTeam todo teams . extractMatch) $ zipWith MatchDisplay upcomings upcomingDetails
+          let lds = filter (isFavTeam todo teams . extractMatch) $ zipWith LiveDisplay lives liveDetails
+              mds = filter (isFavTeam todo teams . extractMatch) $ zipWith UpDisplay upcomings upcomingDetails
               todo = getFollowing opts
 
           -- Print only ones that were already downloaded (if user tried to cancel)
           when (not $ null lds) $ putStrLn "Live matches: \n"
-          mapM_ print lds
+          mapM_ (print . prettyDisplay) lds
           when (not $ null mds) $ putStrLn "Upcoming matches: \n"
-          mapM_ print mds
+          mapM_ (print . prettyDisplay) mds
 
 
 -- | Option for user to cancel downloading
@@ -98,9 +103,12 @@ cancelDownload ls as = forkIO $ do
 
 teams = ["OG Dota2"]
 extractMatch :: MatchDisplay -> Match
-extractMatch (MatchDisplay _ (Right (MatchDetails_l lm))) = lMatchup lm
-extractMatch (MatchDisplay _ (Right (MatchDetails_u um))) = uMatchup um
-extractMatch (MatchDisplay _ (Left _)) = ("","")
+extractMatch (LiveDisplay _ lmd) = case lmd of
+  Left _-> ("","")
+  Right md -> lMatchup md
+extractMatch (UpDisplay _ umd) = case umd of
+  Left _ -> ("","")
+  Right md -> uMatchup md
 
 -- | If one of the followed teams is in the match pair, select the pair
 isFavTeam :: Bool -> [Team] -> Match -> Bool

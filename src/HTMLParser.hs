@@ -40,16 +40,18 @@ type Tournament = T.Text
 
 data MatchInfo = Live Tournament
                | Upcoming Time Tournament
-               deriving (Eq)
+               deriving (Show)
 
 getTourURL :: MatchInfo -> URL
 getTourURL (Live t) = t
 getTourURL (Upcoming _ t) = t
 
 -- | Specific match detail after following URL
+{-
 data MatchDetails = MatchDetails_l LiveMatchDetails
                   | MatchDetails_u UpMatchDetails
-                  deriving (Eq)
+                  deriving (Show)
+-}
 
 data LiveMatchDetails = LiveMatchDetails
   { lTitle :: T.Text         -- ^ Title of the tournament
@@ -57,42 +59,17 @@ data LiveMatchDetails = LiveMatchDetails
   , lMatchup :: Match        -- ^ Team names
   , lResults :: Maybe [T.Text]     -- ^ Results for past and current games
   , lCurrent :: Int       -- ^ Current game being played, e.g. 2nd game
-  } deriving (Eq)
+  } deriving (Show)
 
 data UpMatchDetails = UpMatchDetails
   { uTitle :: T.Text
   , uType :: T.Text
   , uMatchup :: Match
-  } deriving (Eq)
+  } deriving (Show)
 
-data MatchDisplay = MatchDisplay MatchInfo (Either SomeException MatchDetails)
-
-instance Show MatchInfo where
-  show (Live _) = "\n"
-  show (Upcoming t tour) =
-    T.unpack $ T.concat ["Live in ", t, "\n"]
-
-instance Show MatchDetails where
-  show (MatchDetails_l lmd) = show lmd
-  show (MatchDetails_u umd) = show umd
-
-instance Show LiveMatchDetails where
-  show (LiveMatchDetails n t (t1, t2) res c) =
-    T.unpack t1 <> " vs. " <> T.unpack t2 <> "\n"
-    <> (T.unpack $ n <> "\n" <> t) <> "\n"
-    <> (show $ fmap (map T.unpack) res) <> "\n"
-    <> "Currently playing game " <> show c <> "\n"
-
-instance Show UpMatchDetails where
-  show (UpMatchDetails n t (t1, t2)) =
-    T.unpack $ T.concat [t1, " vs. ", t2, "\n", n, "\n", t]
-
-instance Show MatchDisplay where
-  show (MatchDisplay info (Left err)) =
-    show err <> "\n" <> show info
-  show (MatchDisplay info (Right details)) =
-    show details <> "\n" <> (show info)
-
+data MatchDisplay = LiveDisplay MatchInfo (Either SomeException LiveMatchDetails)
+                  | UpDisplay MatchInfo (Either SomeException UpMatchDetails)
+                  deriving (Show)
 
 team :: String -> Scraper T.Text Team
 team side = chroot ("span" @: ["class" @= ("opp " ++ side)]) $ text "span"
@@ -175,24 +152,24 @@ tourCurrent = fmap currentGame $ texts $ "a" @: ["class" @= "button live js-pare
 --tourResults = chroot ("div" @: ["class" @= "matches-streams"]) tourResult
 
 -- | Main tournament parsers, live or upcoming games
-liveTourParser :: Options -> Scraper T.Text MatchDetails
+liveTourParser :: Options -> Scraper T.Text LiveMatchDetails
 liveTourParser opts = do
   n <- tourName
   t <- tourType
   m <- tourMatchup
   r <- fmap choice tourResult
   c <- tourCurrent
-  return $ MatchDetails_l $ LiveMatchDetails n t m r c where
+  return $ LiveMatchDetails n t m r c where
     choice :: [T.Text] -> Maybe [T.Text]
     choice res | (getSpoilMode opts) = Just res
                | otherwise = Nothing
 
-upTourParser :: Options -> Scraper T.Text MatchDetails
+upTourParser :: Options -> Scraper T.Text UpMatchDetails
 upTourParser opts = do
   n <- tourName
   t <- tourType
   m <- tourMatchup
-  return $ MatchDetails_u $ UpMatchDetails n t m
+  return $ UpMatchDetails n t m
 
 -- | Main tournament parser
 --tourParser :: Scraper T.Text MatchDetails
