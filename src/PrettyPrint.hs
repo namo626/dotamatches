@@ -3,6 +3,7 @@
 module PrettyPrint where
 
 import Text.PrettyPrint.ANSI.Leijen
+import Control.Exception (Exception, toException)
 import HTMLParser
 import qualified Data.Text.Lazy as T
 import Prelude hiding ((<$>))
@@ -64,12 +65,13 @@ prettyInfo (Upcoming t _) =
 
 --data MatchDisplay = MatchDisplay MatchInfo (Either SomeException MatchDetails)
 res = prettyDisplay $ UpDisplay (Upcoming "20hr" "url") (Right $ UpMatchDetails "DAC 2018" "Best of 3" ("NAvi", "OG"))
+res' = prettyDisplay $ UpDisplay (Upcoming "20hr" "url") (Left $ toException TournamentException)
 
 prettyDisplay :: MatchDisplay -> Doc
 prettyDisplay (LiveDisplay mi emd) =
   case emd of
     Left err -> text $ show err
-    Right md -> nest 2 $ prettyLiveDetails md <$> prettyInfo mi
+    Right md -> prettyLiveDetails md
 prettyDisplay (UpDisplay mi emd) =
   case emd of
     Left err -> text $ show err
