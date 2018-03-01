@@ -3,12 +3,15 @@
 module PrettyPrint where
 
 import Text.PrettyPrint.ANSI.Leijen
-import Control.Exception (Exception, toException)
+import Control.Exception
 import HTMLParser
 import qualified Data.Text.Lazy as T
 import Prelude hiding ((<$>))
 
 test = prettyUpDetails (UpMatchDetails "DAC 2018" "Best of 1" ("Mineski", "Navi"))
+
+instance Pretty UpMatchDetails where
+  pretty = prettyUpDetails
 
 prettyUpDetails ::  UpMatchDetails -> Doc
 prettyUpDetails (UpMatchDetails title t (t1, t2)) =
@@ -32,6 +35,9 @@ data LiveMatchDetails = LiveMatchDetails
 test' = prettyLiveDetails (LiveMatchDetails "DAC 2018" "Best of 1" ("OG", "EG") Nothing 1)
 test'' = prettyLiveDetails (LiveMatchDetails "DAC 2018" "Best of 1" ("OG", "EG") (Just ["OG"]) 1)
 
+instance Pretty LiveMatchDetails where
+  pretty = prettyLiveDetails
+
 prettyLiveDetails :: LiveMatchDetails -> Doc
 prettyLiveDetails (LiveMatchDetails title t (t1, t2) rs c) =
   hang 2 $ (bold $ dullyellow (text t1' <+> text "vs." <+> text t2'))
@@ -48,13 +54,11 @@ prettyLiveDetails (LiveMatchDetails title t (t1, t2) rs c) =
         showSpoil (Just xs) = line <> (parens $ align $ cat $ punctuate comma $ map text xs)
         showSpoil _ = empty
 
-{-
-instance Show MatchInfo where
-  show (Live _) = "\n"
-  show (Upcoming t tour) =
-    T.unpack $ T.concat ["Live in ", t, "\n"]
--}
+
 info = Upcoming "20hr" "url"
+
+instance Pretty MatchInfo where
+  pretty = prettyInfo
 
 prettyInfo :: MatchInfo -> Doc
 prettyInfo (Live _) = empty
@@ -63,16 +67,18 @@ prettyInfo (Upcoming t _) =
   where t' = T.unpack t
 
 
---data MatchDisplay = MatchDisplay MatchInfo (Either SomeException MatchDetails)
 res = prettyDisplay $ UpDisplay (Upcoming "20hr" "url") (Right $ UpMatchDetails "DAC 2018" "Best of 3" ("NAvi", "OG"))
-res' = prettyDisplay $ UpDisplay (Upcoming "20hr" "url") (Left $ toException TournamentException)
+res' = prettyDisplay $ UpDisplay (Upcoming "20hr" "url") (Left $ toException MatchException)
+
+instance Pretty MatchDisplay where
+  pretty = prettyDisplay
 
 prettyDisplay :: MatchDisplay -> Doc
 prettyDisplay (LiveDisplay mi emd) =
   case emd of
-    Left err -> text $ show err
-    Right md -> prettyLiveDetails md
+    Left err -> text $ displayException err
+    Right md -> pretty md
 prettyDisplay (UpDisplay mi emd) =
   case emd of
-    Left err -> text $ show err
-    Right md -> nest 2 $ prettyUpDetails md <$> prettyInfo mi
+    Left err -> text $ displayException err
+    Right md -> nest 2 $ pretty md <$> pretty mi

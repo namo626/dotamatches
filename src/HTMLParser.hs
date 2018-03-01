@@ -40,9 +40,9 @@ data MatchInfo = Live URL
                | Upcoming T.Text URL
                deriving (Show)
 
-getTourURL :: MatchInfo -> URL
-getTourURL (Live t) = t
-getTourURL (Upcoming _ t) = t
+getMatchURL :: MatchInfo -> URL
+getMatchURL (Live t) = t
+getMatchURL (Upcoming _ t) = t
 
 -- | Contains details of a live match gathered from the link
 data LiveMatchDetails = LiveMatchDetails
@@ -80,25 +80,25 @@ time = text ("span" @: ["class" @= "live-in"])
 -- | URL header for inner links from which the details will be parsed
 headerURL = "https://www.gosugamers.net"
 
--- | Parses the tournament URL in the right side (with logo)
-tourURL :: Scraper T.Text URL
-tourURL = fmap (headerURL <>) $ attr "href" $ "a" @: ["class" @= "tooltip-right"]
+-- | Parses the detail URL in the right side (with logo)
+matchURL :: Scraper T.Text URL
+matchURL = fmap (headerURL <>) $ attr "href" $ "a" @: ["class" @= "tooltip-right"]
 
--- | Parses the tournament URL in the center
-tourURL' :: Scraper T.Text URL
-tourURL' = fmap (headerURL <>) $ attr "href" $ "a" @: ["class" @= "match hover-background"]
+-- | Parses the detail URL in the center
+matchURL' :: Scraper T.Text URL
+matchURL' = fmap (headerURL <>) $ attr "href" $ "a" @: ["class" @= "match hover-background"]
 
 -- | Parses a live match
 liveMatchInfo :: Scraper T.Text MatchInfo
 liveMatchInfo = do
-  tournament <- tourURL'
+  tournament <- matchURL'
   return $ Live tournament
 
 -- | Parses an upcoming match
 upMatchInfo :: Scraper T.Text MatchInfo
 upMatchInfo = do
   t <- time
-  tournament <- tourURL'
+  tournament <- matchURL'
   return $ Upcoming (T.strip $ noEscape t) tournament
 
 noEscape :: T.Text -> T.Text
@@ -154,8 +154,6 @@ detCurrent =
     currentGame :: [T.Text] -> Int
     currentGame r = maximum . map (read . filter isDigit . T.unpack) $ r
 
---tourResults :: Scraper T.Text [T.Text]
---tourResults = chroot ("div" @: ["class" @= "matches-streams"]) tourResult
 
 -- | Main detail parser for a live match. Accepts the given command line options.
 liveDetails :: Options -> Scraper T.Text LiveMatchDetails
@@ -199,8 +197,8 @@ getBody url = do
   return $ response ^. responseBody . to decodeUtf8
 
 -- | Executes a given Scraper on the URL. Can throw exceptions.
-processTour :: Scraper T.Text a -> URL -> IO a
-processTour p url = do
+processURL :: Scraper T.Text a -> URL -> IO a
+processURL p url = do
   body <- getBody url
   threadDelay $ 1 * 10^6
   let tourPage = scrape' p body
