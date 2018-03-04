@@ -1,6 +1,7 @@
 *
 !.gitignore
 !src/
+!Dotamatches/
 !*.cabal
 !*.yaml
 !*.hs
