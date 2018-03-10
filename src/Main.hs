@@ -9,9 +9,9 @@
 * Error handling
 -}
 
-import Dotamatches.Cmd
-import Dotamatches.HTMLParser hiding (UpMatchDetails, LiveMatchDetails, MatchInfo, MatchDisplay)
-import Dotamatches.PrettyPrint
+import Cmd
+import HTMLParser hiding (UpMatchDetails, LiveMatchDetails, MatchInfo, MatchDisplay)
+import PrettyPrint
 
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 import System.Exit

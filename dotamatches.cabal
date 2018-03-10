@@ -1,8 +1,6 @@
 name:                dotamatches
 version:             0.1.0.0
--- synopsis:
--- description:
-homepage:            https://github.com/githubuser/dotamatches#readme
+homepage:            https://github.com/namo626/dotamatches
 license:             BSD3
 license-file:        LICENSE
 author:              n626
@@ -13,9 +11,9 @@ extra-source-files:  README.md
 
 library
   hs-source-dirs:    src
-  exposed-modules:   Dotamatches.Cmd,
-                     Dotamatches.PrettyPrint,
-                     Dotamatches.HTMLParser
+  exposed-modules:   Cmd,
+                     PrettyPrint,
+                     HTMLParser
   build-depends:     optparse-applicative,
                      async >= 2.1.1.1,
                      http-client,
@@ -36,10 +34,10 @@ executable dotamatches
   hs-source-dirs:      src
   main-is:             Main.hs
   default-language:    Haskell2010
-  ghc-options:         -O2 -threaded -eventlog -rtsopts -with-rtsopts=-N4 -l -Wall
-  other-modules:       Dotamatches.Cmd,
-                       Dotamatches.PrettyPrint,
-                       Dotamatches.HTMLParser
+  ghc-options:         -O2 -Wall -threaded -eventlog -rtsopts -with-rtsopts=-N4
+  other-modules:       Cmd,
+                       PrettyPrint,
+                       HTMLParser
   build-depends:       MissingH,
                        async >= 2.1.1.1,
                        http-client,
