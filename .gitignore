@@ -5,3 +5,5 @@
 !*.cabal
 !*.yaml
 !*.hs
+!*.md
+!LICENSE
