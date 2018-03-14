@@ -14,14 +14,6 @@ module HTMLParser
   , getMatchURL
   ) where
 
-{- TODOs:
-* Filter for selected teams
-* Pretty printing
-* Terminal color support
-* Concurrency design
-* Caching
-* Error handling
--}
 
 import Cmd
 import Text.HTML.Scalpel hiding (URL)
@@ -46,7 +38,7 @@ import Control.Concurrent (threadDelay)
 type URL = T.Text
 type Match = (T.Text, T.Text)
 
--- | A MatchInfo consists of a link for details and time ticker (for upcoming ones)
+-- | A MatchInfo consists of a match URL and the time remaining (for upcoming ones)
 data MatchInfo = Live URL
                | Upcoming T.Text URL
                deriving (Show)
@@ -55,7 +47,7 @@ getMatchURL :: MatchInfo -> URL
 getMatchURL (Live t) = t
 getMatchURL (Upcoming _ t) = t
 
--- | Contains details of a live match gathered from the link
+-- | Contains details of a live match gathered from the URL in MatchInfo
 data LiveMatchDetails = LiveMatchDetails
   { lTitle :: T.Text         -- ^ Title of the tournament
   , lType :: T.Text          -- ^ BO1, BO3, etc.
@@ -64,14 +56,14 @@ data LiveMatchDetails = LiveMatchDetails
   , lCurrent :: Int       -- ^ Current game being played, e.g. 2nd game
   } deriving (Show)
 
--- | Contains details of an upcoming match gathered from the link
+-- | Contains details of an upcoming match gathered from the URL in MatchInfo
 data UpMatchDetails = UpMatchDetails
   { uTitle :: T.Text    -- ^ Title of the tournament
   , uType :: T.Text     -- ^ BO1, BO3, etc.
   , uMatchup :: Match   -- ^ Team names
   } deriving (Show)
 
--- | Final container for the info and details of each match
+-- | Final container for the info and details of each match that will be displayed
 data MatchDisplay = LiveDisplay MatchInfo (Either SomeException LiveMatchDetails)
                   | UpDisplay MatchInfo (Either SomeException UpMatchDetails)
                   deriving (Show)
@@ -81,7 +73,7 @@ data MatchDisplay = LiveDisplay MatchInfo (Either SomeException LiveMatchDetails
 time :: Scraper T.Text T.Text
 time = text ("span" @: ["class" @= "live-in"])
 
--- | URL header for inner links from which the details will be parsed
+-- URL header for inner links from which the details will be parsed
 headerURL = "https://www.gosugamers.net"
 
 -- | Parses the detail URL in the right side (with logo)
@@ -107,10 +99,7 @@ upMatchInfo = do
 
 noEscape :: T.Text -> T.Text
 noEscape = T.filter f where
-  f c
-    | c == '\n' = False
-    | c == '\r' = False
-    | otherwise = True
+  f c = not (c == '\n' || c == '\r')
 
 -- | Main MatchInfo parser
 matchInfo = upMatchInfo <|> liveMatchInfo
@@ -125,8 +114,9 @@ matchTimes = chroots ("div" @: ["class" @= "box"]) matchInfos
 
 
 
--- * Navigating match links for details
--- These functions are used within each match's own page
+{- Navigating match links for details.
+These functions are used within each match's own page.
+-}
 
 -- | Parses the tournament name
 detName :: Scraper T.Text T.Text

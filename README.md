@@ -1,12 +1,22 @@
 # dotamatches
 
-A command line Dota 2 match reporter. Scrapes live and upcoming match information from https://www.gosugamers.net/dota2/gosubet
+A command line Dota 2 match reporter. Scrapes live and upcoming match information from https://www.gosugamers.net/dota2/gosubet .
 
-## Using:
-Build the project:
+## Usage:
+Build the program:
 
-`stack build -- +RTS -N4`
+`stack build`
 
 Run:
 
-`stack exec dotamatches -- [options]`
+`stack exec dotamatches -- [OPTIONS]`
+
+## Examples:
+
+For help, use:
+
+`stack exec dotamatches -- --help`
+
+View only live games and current scores:
+
+`stack exec dotamatches -- --live --spoil`

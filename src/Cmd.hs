@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+-- Parsing command line options
+
 module Cmd
   ( Options(..)
   , ViewTime(..)
@@ -76,11 +78,11 @@ now :: Parser ViewTime
 now = flag' Now
        ( short 'l'
       <> long "live"
-      <> help "Display only live games" )
+      <> help "Display only live matches" )
 
 -- | Choice to view only upcoming matches
 next :: Parser ViewTime
 next = flag Both Next
         ( short 'u'
         <> long "upcoming"
-        <> help "Display only upcoming games" )
+        <> help "Display only upcoming matches" )

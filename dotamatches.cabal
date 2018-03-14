@@ -11,6 +11,7 @@ extra-source-files:  README.md
 
 library
   hs-source-dirs:    src
+  default-language:  Haskell2010
   exposed-modules:   Cmd,
                      PrettyPrint,
                      HTMLParser
@@ -34,7 +35,7 @@ executable dotamatches
   hs-source-dirs:      src
   main-is:             Main.hs
   default-language:    Haskell2010
-  ghc-options:         -O2 -Wall -threaded -eventlog -rtsopts -with-rtsopts=-N4
+  ghc-options:         -O2 -threaded -rtsopts
   other-modules:       Cmd,
                        PrettyPrint,
                        HTMLParser
@@ -51,4 +52,3 @@ executable dotamatches
                        wreq,
                        SafeSemaphore,
                        ansi-wl-pprint
-  default-language:    Haskell2010

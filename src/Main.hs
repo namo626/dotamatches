@@ -19,7 +19,6 @@ import System.Environment (getArgs)
 import Options.Applicative (execParser)
 import System.IO
 import Data.Char (isDigit)
---import Data.Either (rights)
 import Network.HTTP.Client (HttpException(..))
 import Control.Exception
 import qualified Data.Text.Lazy as T
@@ -31,7 +30,6 @@ import Control.Monad
 import Data.Monoid ((<>))
 import Control.Concurrent.MSem
 --import Control.Concurrent.CachedIO (cachedIO)
-
 
 
 
